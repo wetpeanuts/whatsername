@@ -1,0 +1,25 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release
+      - name: Package binary
+        run: tar -czf whatsername-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz -C target/release whatsername
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: whatsername-*.tar.gz

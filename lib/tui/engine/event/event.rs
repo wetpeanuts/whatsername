@@ -6,4 +6,5 @@ pub enum Event {
     Close(CloseEvent), // Exit event loop
     Render,            // Trigger view rerendering
     Update,            // Trigger view update + rerendering
+    Error(String),     // Exit event loop with an error
 }
