@@ -1,6 +1,6 @@
 # whatsername
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](Cargo.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![CI](https://github.com/wetpeanuts/whatsername/actions/workflows/ci.yml/badge.svg)](https://github.com/wetpeanuts/whatsername/actions/workflows/ci.yml)
 
