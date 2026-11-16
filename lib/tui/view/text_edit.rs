@@ -13,11 +13,15 @@ const RIGHT_PADDING: usize = 1;
 const TEXT_CAPACITY_OFFSET: usize = BORDER_COLUMNS + PREFIX_COLUMNS + RIGHT_PADDING;
 const DEFAULT_WIDTH: usize = 80;
 const BORDER_TITLE_OFFSET: usize = 3;
+const DISABLED_STYLE: &str = "\x1b[90m";
+const STYLE_RESET: &str = "\x1b[0m";
+const STYLE_OVERHEAD: usize = DISABLED_STYLE.len() + STYLE_RESET.len();
 
 pub struct TextEditView {
     title: String,
     text: String,
     cursor: usize,
+    disabled: bool,
     last_width: Cell<usize>,
 }
 
@@ -30,12 +34,17 @@ impl TextEditView {
             title: title.into(),
             text,
             cursor,
+            disabled: false,
             last_width: Cell::new(DEFAULT_WIDTH),
         }
     }
 
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    pub fn set_disabled(&mut self, disabled: bool) {
+        self.disabled = disabled;
     }
 
     fn set_char_index(&mut self, index: usize) {
@@ -111,8 +120,14 @@ impl TextEditView {
             let mut line = String::with_capacity(width);
             line.push('│');
             line.push_str(prefix);
+            if self.disabled {
+                line.push_str(DISABLED_STYLE);
+            }
             if start < chars.len() {
                 line.extend(chars[start..end].iter());
+            }
+            if self.disabled {
+                line.push_str(STYLE_RESET);
             }
             line.extend(std::iter::repeat_n(
                 ' ',
@@ -120,21 +135,29 @@ impl TextEditView {
             ));
             line.push('│');
 
-            debug_assert_eq!(line.chars().count(), width);
+            let style_overhead = if self.disabled { STYLE_OVERHEAD } else { 0 };
+            debug_assert_eq!(line.chars().count() - style_overhead, width);
             rows.push(line);
         }
 
         rows.push(format!("╰{}╯", "─".repeat(width - 2)));
 
-        Frame::new(
-            rows,
-            Some((1 + cursor_text_row - offset, 4 + (char_cursor % capacity))),
-        )
+        let cursor = if self.disabled {
+            None
+        } else {
+            Some((1 + cursor_text_row - offset, 4 + (char_cursor % capacity)))
+        };
+
+        Frame::new(rows, cursor)
     }
 }
 
 impl View for TextEditView {
     fn key_event(&mut self, event: KeyEvent) {
+        if self.disabled {
+            return;
+        }
+
         match event.key {
             Key::Char(c) => {
                 self.text.insert(self.cursor, c);
@@ -379,6 +402,45 @@ mod tests {
             &["╭─Command──╮", "│ > ls     │", "╰──────────╯"],
             Some((1, 6)),
         );
+    }
+
+    #[test]
+    fn disabled_view_ignores_editing_keys() {
+        let mut view = TextEditView::new("Prompt", "ls");
+        view.set_disabled(true);
+
+        view.key_event(KeyEvent::new(Key::Char('a')));
+        view.key_event(KeyEvent::new(Key::Backspace));
+
+        assert_eq!(view.text(), "ls");
+    }
+
+    #[test]
+    fn disabled_view_greys_text_and_hides_cursor() {
+        let mut view = TextEditView::new("Prompt", "ls");
+        view.set_disabled(true);
+
+        assert_frame(
+            &view.render(12, 3),
+            &[
+                "╭─Prompt───╮",
+                "│ > \x1b[90mls\x1b[0m     │",
+                "╰──────────╯",
+            ],
+            None,
+        );
+    }
+
+    #[test]
+    fn reenabled_view_restores_editing_and_cursor() {
+        let mut view = TextEditView::new("Prompt", "ls");
+        view.set_disabled(true);
+        view.set_disabled(false);
+
+        view.key_event(KeyEvent::new(Key::Char('a')));
+
+        assert_eq!(view.text(), "lsa");
+        assert_eq!(view.render(12, 3).cursor(), Some((1, 7)));
     }
 
     #[test]

@@ -4,7 +4,6 @@ use crate::tui::engine::{
 };
 
 use anyhow::Result;
-use std::boxed::Box;
 use std::collections::VecDeque;
 use std::sync::mpsc::{self, Receiver, Sender};
 
@@ -16,12 +15,12 @@ struct FrameLayout {
     height: usize,
 }
 
-pub struct App {
+pub struct App<V: View> {
     term: Terminal,
     event_queue: VecDeque<Event>,
     event_rx: Receiver<Event>,
     key_parser: KeyParser,
-    view: Box<dyn View>,
+    view: V,
     previous_layout: Option<FrameLayout>,
 }
 
@@ -41,15 +40,21 @@ impl AppHandle {
         Self { tx }
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_mock_with_rx() -> (Self, Receiver<Event>) {
+        let (tx, rx) = mpsc::channel();
+        (Self { tx }, rx)
+    }
+
     pub fn push(&self, event: Event) {
         let _ = self.tx.send(event);
     }
 }
 
-impl App {
+impl<V: View> App<V> {
     pub fn new<F>(make_view: F) -> Result<Self>
     where
-        F: FnOnce(AppHandle) -> Box<dyn View>,
+        F: FnOnce(AppHandle) -> V,
     {
         let (tx, rx) = mpsc::channel();
         let view = make_view(AppHandle::new(tx));
@@ -64,6 +69,10 @@ impl App {
         })
     }
 
+    pub fn view(&self) -> &V {
+        &self.view
+    }
+
     pub fn exec(&mut self) -> Result<i32> {
         self.render_view()?;
 
@@ -74,6 +83,7 @@ impl App {
             while let Some(event) = self.event_queue.pop_front() {
                 match event {
                     Event::Close(close_event) => return Ok(close_event.status_code),
+                    Event::Error(message) => return Err(anyhow::anyhow!(message)),
                     Event::Key(key_event) => {
                         self.view.key_event(key_event);
                         self.render_view()?;
